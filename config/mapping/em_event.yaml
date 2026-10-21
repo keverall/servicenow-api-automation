@@ -1,0 +1,54 @@
+# Mapping of OpsRamp alerts onto the ServiceNow Event Management table
+# (em_event).  Event Management correlates events into alerts and incidents
+# using the "message_key" column, which is used here as the dedup column.
+#
+# See config/mapping/event.yaml for the supported field specification keys.
+table: em_event
+
+dedup_field: message_key
+
+correlation:
+  format: "opsramp:{clientUniqueId}:{uniqueId}"
+  max_length: 1024
+
+fields:
+  source:
+    const: OpsRamp
+  event_class:
+    from: tenantName
+  node:
+    from: host_name
+  type:
+    from: serviceName
+  resource:
+    from: resource.resourceName
+    fallback: host_name
+  message_key:
+    from: correlation
+  severity:
+    from: currentState
+    map:
+      Critical: "5"
+      Major: "4"
+      Minor: "3"
+      Warning: "2"
+      Ok: "1"
+      Clear: "0"
+      Resolved: "0"
+  resolution_state:
+    on_open:
+      const: New
+    on_recovery:
+      const: Closing
+  time_of_event:
+    from: alertTime
+    format: servicenow_datetime
+  description:
+    render: description
+    truncate: 4000
+  additional_info:
+    render: metadata
+    truncate: 4000
+  cmdb_ci:
+    from: host_name
+    ci_lookup: true

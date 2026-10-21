@@ -1,0 +1,57 @@
+# Mapping of OpsRamp alerts onto the ServiceNow Incident table (incident).
+#
+# See config/mapping/event.yaml for the supported field specification keys.
+table: incident
+
+dedup_field: correlation_id
+
+correlation:
+  format: "opsramp:{clientUniqueId}:{uniqueId}"
+  max_length: 1024
+
+fields:
+  contact_type:
+    const: automation
+  short_description:
+    from: subject
+    truncate: 1000
+  description:
+    render: description
+    truncate: 4000
+  impact:
+    from: currentState
+    map:
+      Critical: "1"
+      Warning: "2"
+    default: "3"
+  urgency:
+    from: currentState
+    map:
+      Critical: "1"
+      Warning: "2"
+    default: "3"
+  priority:
+    from: currentState
+    map:
+      Critical: "1"
+      Warning: "2"
+    default: "3"
+  cmdb_ci:
+    from: host_name
+    ci_lookup: true
+  correlation_id:
+    from: correlation
+  correlation_display:
+    template: "OpsRamp {uniqueId} - {subject}"
+    truncate: 1000
+  opened_at:
+    from: alertTime
+    format: servicenow_datetime
+  state:
+    on_open:
+      const: "1"
+    on_recovery:
+      const: "6"
+  work_notes:
+    render: metadata
+    truncate: 4000

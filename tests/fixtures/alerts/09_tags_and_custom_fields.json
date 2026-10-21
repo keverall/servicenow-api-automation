@@ -1,0 +1,89 @@
+{
+  "acknowledged": false,
+  "alertTime": "2021-07-24T17:19:12+0000",
+  "alertType": "Monitoring",
+  "app": "OpsRamp",
+  "clientTechnology": "OpsRamp",
+  "clientUniqueId": "client_22568",
+  "closed": false,
+  "component": "C",
+  "createdDate": "2021-07-24T17:19:13+0000",
+  "currentState": "Critical",
+  "customFields": [
+    {
+      "name": "runbook",
+      "value": "https://wiki/runbook/disk"
+    }
+  ],
+  "description": "The Physical Memory Usage on the device is 56%.",
+  "device": {
+    "aliasName": "",
+    "hostName": "edge-gw-02",
+    "id": "9297503",
+    "ipAddress": "10.30.0.4",
+    "name": "edge-gw-02",
+    "resourceName": "",
+    "resourceType": "Other",
+    "type": "DEVICE"
+  },
+  "entityType": "RESOURCE",
+  "eventType": "ALERT",
+  "ignoreRecoveryNoise": false,
+  "incidentId": "",
+  "inferenceAlert": false,
+  "isRecoveryAlert": false,
+  "metric": "Network2",
+  "monitorName": "Network2",
+  "mspName": "SQALab",
+  "permanentlySuppressed": false,
+  "priority": "N/A",
+  "problemArea": "Network2",
+  "rba": false,
+  "repeatCount": "2",
+  "resource": {
+    "agentInstalled": false,
+    "aliasName": "",
+    "clientUniqueId": "client_22568",
+    "description": "",
+    "dns": "",
+    "generalInfo": {
+      "createdTime": "2021-05-23T13:39:12+0000",
+      "hostName": "edge-gw-02",
+      "name": "edge-gw-02",
+      "resourceType": "Other"
+    },
+    "hostName": "edge-gw-02",
+    "id": "336a5197-c8d8-46d0-9953-ebf95dd8046b",
+    "ipAddress": "10.30.0.4",
+    "make": "",
+    "name": "edge-gw-02",
+    "osName": "",
+    "resourceName": "",
+    "resourceType": "Other",
+    "source": "ALERT",
+    "state": "active",
+    "status": "UNDEFINED",
+    "tags": [],
+    "type": "Other"
+  },
+  "rtype": "RESOURCE",
+  "serviceName": "SSL",
+  "status": "New",
+  "subject": "Certificate expires in 7 days on edge-gw-02",
+  "suppressed": false,
+  "tags": [
+    {
+      "name": "env",
+      "value": "prod"
+    },
+    {
+      "name": "team",
+      "value": "platform"
+    }
+  ],
+  "tenantId": 22568,
+  "tenantName": "JMClient1605551845209",
+  "ticketed": false,
+  "uniqueId": "122620546",
+  "updatedTime": "2021-07-24T17:40:01+0000"
+}

@@ -1,0 +1,78 @@
+# Mapping of OpsRamp alerts onto the ServiceNow ITSM "Event" table (event).
+#
+# Every key under "fields" is a ServiceNow column.  A field specification may
+# use any combination of:
+#   const       - a fixed value
+#   from        - a dotted path into the alert (subject, device.hostName, ...)
+#                 or the pseudo sources "correlation" and "state"
+#   fallback    - a second path used when "from" resolves to nothing
+#   map         - a source value -> target value lookup
+#   default     - used when the source is missing or absent from the map
+#   template    - a str.format template over the alert context
+#   render      - a built-in renderer ("description" or "metadata")
+#   truncate    - maximum string length
+#   ci_lookup   - resolve the value as a ServiceNow cmdb_ci sys_id
+#   format      - "servicenow_datetime" renders YYYY-MM-DD HH:MM:SS
+#   on_open     - branch used for a newly raised alert
+#   on_recovery - branch used for a recovery alert
+#   optional    - omit the field instead of writing null
+table: event
+
+# The column used to deduplicate. One OpsRamp alert maps to exactly one row.
+dedup_field: correlation_id
+
+correlation:
+  format: "opsramp:{clientUniqueId}:{uniqueId}"
+  max_length: 1024
+
+fields:
+  source:
+    const: OpsRamp
+  category:
+    from: alertType
+    map:
+      Monitoring: Software
+      Infrastructure: Hardware
+      Application: Software
+    default: Software
+  subcategory:
+    from: serviceName
+  impact:
+    from: currentState
+    map:
+      Critical: "1"
+      Warning: "2"
+    default: "3"
+  urgency:
+    from: currentState
+    map:
+      Critical: "1"
+      Warning: "2"
+    default: "3"
+  message:
+    from: subject
+    truncate: 1000
+  description:
+    render: description
+    truncate: 4000
+  node:
+    from: host_name
+  cmdb_ci:
+    from: host_name
+    ci_lookup: true
+  correlation_id:
+    from: correlation
+  correlation_display:
+    template: "OpsRamp {uniqueId} - {subject}"
+    truncate: 1000
+  opened_at:
+    from: alertTime
+    format: servicenow_datetime
+  state:
+    on_open:
+      const: "1"
+    on_recovery:
+      const: "6"
+  comments:
+    render: metadata
+    truncate: 4000
