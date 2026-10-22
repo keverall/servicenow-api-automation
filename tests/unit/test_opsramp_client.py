@@ -39,7 +39,9 @@ def test_token_is_fetched_once_and_reused(respx_mock: respx.MockRouter, opsramp_
 
 
 @respx.mock
-def test_token_manager_refreshes_when_expired(respx_mock: respx.MockRouter, opsramp_settings) -> None:
+def test_token_manager_refreshes_when_expired(
+    respx_mock: respx.MockRouter, opsramp_settings
+) -> None:
     token = respx_mock.post(TOKEN_URL).mock(
         return_value=httpx.Response(200, json={"access_token": "abc", "expires_in": 1})
     )
@@ -81,7 +83,9 @@ def test_bad_credentials_raise_auth_error(respx_mock: respx.MockRouter, opsramp_
 
 
 @respx.mock
-def test_401_triggers_a_single_token_refresh(respx_mock: respx.MockRouter, opsramp_settings) -> None:
+def test_401_triggers_a_single_token_refresh(
+    respx_mock: respx.MockRouter, opsramp_settings
+) -> None:
     token = respx_mock.post(TOKEN_URL).mock(
         return_value=httpx.Response(200, json={"access_token": "abc", "expires_in": 7199})
     )
@@ -112,7 +116,9 @@ def test_429_honours_the_ratelimit_reset_header(
     respx_mock.get(f"{API}/v2/ping").mock(
         side_effect=[
             httpx.Response(
-                429, json={"message": "slow down"}, headers={"x-ratelimit-reset": str(int(time.time()))}
+                429,
+                json={"message": "slow down"},
+                headers={"x-ratelimit-reset": str(int(time.time()))},
             ),
             httpx.Response(200, json={"ok": True}),
         ]

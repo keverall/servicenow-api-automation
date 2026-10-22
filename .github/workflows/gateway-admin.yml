@@ -1,0 +1,230 @@
+name: Administer OpsRamp gateway
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment whose scoped secrets should be used
+        required: true
+        default: prod
+        type: choice
+        options: [dev, staging, prod]
+      operation:
+        description: Administrative operation to run
+        required: true
+        type: choice
+        options:
+          - status
+          - config
+          - network-set
+          - ntp-set
+          - syslog-add
+          - syslog-delete
+          - syslog-reset
+          - timezone-set
+          - route-add
+          - proxy-set
+          - password-change
+          - service
+          - restart
+          - register
+      info:
+        description: Configuration section (only for the "config" operation)
+        required: false
+        default: generalInfo
+        type: choice
+        options: [generalInfo, syslogInfo, ntpInfo, tzInfo, servicesInfo, routesInfo]
+      service:
+        description: Appliance service (only for the "service" operation)
+        required: false
+        default: ntp
+        type: choice
+        options: [network, squid, postgresql, ntp]
+      action:
+        description: Service action (only for the "service" operation)
+        required: false
+        default: status
+        type: choice
+        options: [start, stop, status, restart]
+      hostname:
+        description: Host name (network-set)
+        required: false
+      ip:
+        description: IP address (network-set)
+        required: false
+      subnet:
+        description: Subnet mask (network-set)
+        required: false
+      gateway:
+        description: Default gateway (network-set / route-add)
+        required: false
+      dns:
+        description: DNS servers (network-set)
+        required: false
+      domain:
+        description: Domain name (network-set)
+        required: false
+      interface:
+        description: Network interface (network-set / route-add)
+        required: false
+      dhcp:
+        description: Use DHCP instead of a static address (network-set)
+        required: false
+        type: boolean
+      ntp_server:
+        description: NTP server, repeatable (ntp-set)
+        required: false
+      receiver:
+        description: Syslog receiver (syslog-add / syslog-delete)
+        required: false
+      port:
+        description: Syslog port (syslog-add / syslog-delete)
+        required: false
+        default: "514"
+      protocol:
+        description: Syslog protocol (syslog-add / syslog-delete)
+        required: false
+        default: udp
+        type: choice
+        options: [udp, tcp]
+      timezone:
+        description: Time zone identifier (timezone-set)
+        required: false
+      network:
+        description: Destination network (route-add)
+        required: false
+      metric:
+        description: Route metric (route-add)
+        required: false
+        default: "0"
+      direct:
+        description: Disable the proxy (proxy-set)
+        required: false
+        type: boolean
+      proxy_ip:
+        description: Proxy address (proxy-set)
+        required: false
+      proxy_port:
+        description: Proxy port (proxy-set)
+        required: false
+      server:
+        description: OpsRamp API server URL (register)
+        required: false
+      activation_token:
+        description: Activation token (register); defaults to the secret
+        required: false
+      payload_json:
+        description: Raw JSON body overriding the generated payload
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gateway-admin-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  admin:
+    name: Run the administrative operation
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install
+        run: uv sync --frozen
+
+      - name: Gateway CA certificate
+        if: ${{ env.GATEWAY_CA_BUNDLE != '' }}
+        env:
+          GATEWAY_CA_BUNDLE: ${{ secrets.GATEWAY_CA_BUNDLE }}
+        run: |
+          mkdir -p .opsramp-certs
+          printf '%s' "$GATEWAY_CA_BUNDLE" | base64 -d > .opsramp-certs/gateway-ca.pem
+          echo "GATEWAY_CA_BUNDLE=.opsramp-certs/gateway-ca.pem" >> "$GITHUB_ENV"
+
+      - name: Run the operation
+        env:
+          GATEWAY_HOST: ${{ secrets.GATEWAY_HOST }}
+          GATEWAY_PORT: ${{ secrets.GATEWAY_PORT }}
+          GATEWAY_USERNAME: ${{ secrets.GATEWAY_USERNAME }}
+          GATEWAY_PASSWORD: ${{ secrets.GATEWAY_PASSWORD }}
+          GATEWAY_REGISTRATION_SERVER: ${{ secrets.GATEWAY_REGISTRATION_SERVER }}
+          GATEWAY_OLD_PASSWORD: ${{ secrets.GATEWAY_OLD_PASSWORD }}
+          GATEWAY_NEW_PASSWORD: ${{ secrets.GATEWAY_NEW_PASSWORD }}
+          OPSRAMP_BASE_URL: ${{ secrets.OPSRAMP_BASE_URL }}
+          OPSRAMP_TENANT_ID: ${{ secrets.OPSRAMP_TENANT_ID }}
+          OPSRAMP_CLIENT_ID: ${{ secrets.OPSRAMP_CLIENT_ID }}
+          OPSRAMP_CLIENT_SECRET: ${{ secrets.OPSRAMP_CLIENT_SECRET }}
+          INPUT_OPERATION: ${{ inputs.operation }}
+          INPUT_INFO: ${{ inputs.info }}
+          INPUT_SERVICE: ${{ inputs.service }}
+          INPUT_ACTION: ${{ inputs.action }}
+          INPUT_HOSTNAME: ${{ inputs.hostname }}
+          INPUT_IP: ${{ inputs.ip }}
+          INPUT_SUBNET: ${{ inputs.subnet }}
+          INPUT_GATEWAY: ${{ inputs.gateway }}
+          INPUT_DNS: ${{ inputs.dns }}
+          INPUT_DOMAIN: ${{ inputs.domain }}
+          INPUT_INTERFACE: ${{ inputs.interface }}
+          INPUT_DHCP: ${{ inputs.dhcp }}
+          INPUT_NTP_SERVER: ${{ inputs.ntp_server }}
+          INPUT_RECEIVER: ${{ inputs.receiver }}
+          INPUT_PORT: ${{ inputs.port }}
+          INPUT_PROTOCOL: ${{ inputs.protocol }}
+          INPUT_TIMEZONE: ${{ inputs.timezone }}
+          INPUT_NETWORK: ${{ inputs.network }}
+          INPUT_METRIC: ${{ inputs.metric }}
+          INPUT_DIRECT: ${{ inputs.direct }}
+          INPUT_PROXY_IP: ${{ inputs.proxy_ip }}
+          INPUT_PROXY_PORT: ${{ inputs.proxy_port }}
+          INPUT_SERVER: ${{ inputs.server }}
+          INPUT_ACTIVATION_TOKEN: ${{ inputs.activation_token || secrets.OPSRAMP_ACTIVATION_TOKEN }}
+          INPUT_PAYLOAD_JSON: ${{ inputs.payload_json }}
+        run: |
+          set -euo pipefail
+          payload_flag() {
+            if [ -n "${INPUT_PAYLOAD_JSON:-}" ]; then
+              printf '%s' "--payload-json ${INPUT_PAYLOAD_JSON}"
+            fi
+          }
+          case "$INPUT_OPERATION" in
+            status)     uv run opsramp-gw admin status ;;
+            config)     uv run opsramp-gw admin config --info "$INPUT_INFO" ;;
+            network-set)
+              uv run opsramp-gw admin network set \
+                --hostname "$INPUT_HOSTNAME" --ip "$INPUT_IP" --subnet "$INPUT_SUBNET" \
+                --gateway "$INPUT_GATEWAY" --dns "$INPUT_DNS" --domain "$INPUT_DOMAIN" \
+                --interface "$INPUT_INTERFACE" $( [ "$INPUT_DHCP" = "true" ] && echo "--dhcp" || echo "" ) \
+                $(payload_flag)
+              ;;
+            ntp-set)    uv run opsramp-gw admin ntp set --server "$INPUT_NTP_SERVER" --sync $(payload_flag) ;;
+            syslog-add)
+              uv run opsramp-gw admin syslog add --receiver "$INPUT_RECEIVER" --port "$INPUT_PORT" \
+                --protocol "$INPUT_PROTOCOL" $(payload_flag) ;;
+            syslog-delete)
+              uv run opsramp-gw admin syslog delete --receiver "$INPUT_RECEIVER" --port "$INPUT_PORT" \
+                --protocol "$INPUT_PROTOCOL" $(payload_flag) ;;
+            syslog-reset) uv run opsramp-gw admin syslog reset ;;
+            timezone-set) uv run opsramp-gw admin timezone set --tz "$INPUT_TIMEZONE" $(payload_flag) ;;
+            route-add)
+              uv run opsramp-gw admin route add --network "$INPUT_NETWORK" --gateway "$INPUT_GATEWAY" \
+                --subnet "$INPUT_SUBNET" --metric "$INPUT_METRIC" --interface "$INPUT_INTERFACE" \
+                $(payload_flag) ;;
+            proxy-set)
+              uv run opsramp-gw admin proxy set $( [ "$INPUT_DIRECT" = "true" ] && echo "--direct" || echo "" ) \
+                --proxy-ip "$INPUT_PROXY_IP" --proxy-port "$INPUT_PROXY_PORT" $(payload_flag) ;;
+            password-change) uv run opsramp-gw admin password change ;;
+            service)    uv run opsramp-gw admin service "$INPUT_SERVICE" "$INPUT_ACTION" ;;
+            restart)    uv run opsramp-gw admin restart all ;;
+            register)
+              uv run opsramp-gw admin register --server "$INPUT_SERVER" \
+                --activation-token "$INPUT_ACTIVATION_TOKEN" $(payload_flag) ;;
+            *) echo "unsupported operation: $INPUT_OPERATION" >&2; exit 2 ;;
+          esac

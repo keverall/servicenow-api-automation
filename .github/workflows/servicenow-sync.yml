@@ -1,0 +1,97 @@
+name: Sync OpsRamp alerts to ServiceNow
+
+on:
+  schedule:
+    # Every five minutes. OpsRamp rate limits the alert search to 50
+    # paginated requests per minute per client, so the interval must not be
+    # shortened without narrowing the client filter.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Report what would change without writing to ServiceNow
+        required: false
+        default: false
+        type: boolean
+      mapping:
+        description: Mapping file to use
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never overlap two sync runs against the same tenant.
+  group: servicenow-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Synchronise alerts
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install
+        run: uv sync --frozen
+
+      - name: Sync
+        id: sync
+        continue-on-error: true
+        env:
+          OPSRAMP_BASE_URL: ${{ secrets.OPSRAMP_BASE_URL }}
+          OPSRAMP_TENANT_ID: ${{ secrets.OPSRAMP_TENANT_ID }}
+          OPSRAMP_CLIENT_ID: ${{ secrets.OPSRAMP_CLIENT_ID }}
+          OPSRAMP_CLIENT_SECRET: ${{ secrets.OPSRAMP_CLIENT_SECRET }}
+          SERVICENOW_INSTANCE: ${{ secrets.SERVICENOW_INSTANCE }}
+          SERVICENOW_TABLE: ${{ secrets.SERVICENOW_TABLE }}
+          SERVICENOW_USERNAME: ${{ secrets.SERVICENOW_USERNAME }}
+          SERVICENOW_PASSWORD: ${{ secrets.SERVICENOW_PASSWORD }}
+          SERVICENOW_AUTH_MODE: ${{ secrets.SERVICENOW_AUTH_MODE }}
+          SYNC_CLIENT_IDS: ${{ vars.SYNC_CLIENT_IDS }}
+          SYNC_STATES: ${{ vars.SYNC_STATES }}
+          SYNC_LOOKBACK_MINUTES: ${{ vars.SYNC_LOOKBACK_MINUTES }}
+          SYNC_DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+          SYNC_CI_LOOKUP: ${{ vars.SYNC_CI_LOOKUP }}
+        run: |
+          set -o pipefail
+          uv run opsramp-gw sync --once \
+            ${{ inputs.dry_run && '--dry-run' || '' }} \
+            ${{ inputs.mapping && format('--mapping {0}', inputs.mapping) || '' }} \
+            --report sync-report.json \
+            | tee sync-output.txt
+
+      - name: Publish the report
+        if: always()
+        run: |
+          {
+            echo "### OpsRamp to ServiceNow sync"
+            echo
+            echo '```'
+            cat sync-output.txt 2>/dev/null || echo "no output captured"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the sync report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-report
+          path: |
+            sync-report.json
+            sync-output.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Fail when the sync reported failures
+        if: steps.sync.outcome == 'failure'
+        run: |
+          echo "::error::The ServiceNow sync failed. See the job summary for details."
+          exit 1

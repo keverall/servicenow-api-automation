@@ -85,7 +85,12 @@ def configure_logging(level: str = "INFO", *, json_output: bool = True) -> None:
     """
     numeric_level = getattr(logging, level.upper(), logging.INFO)
 
-    logging.basicConfig(format="%(message)s", stream=sys.stdout, level=numeric_level)
+    root = logging.getLogger()
+    root.setLevel(numeric_level)
+    if not root.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        root.addHandler(handler)
     for noisy in ("httpx", "httpcore", "urllib3"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
@@ -105,7 +110,9 @@ def configure_logging(level: str = "INFO", *, json_output: bool = True) -> None:
             renderer,
         ],
         wrapper_class=structlog.make_filtering_bound_logger(numeric_level),
-        logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
+        # The stdlib logger factory is required by ``add_logger_name``: it
+        # reads ``logger.name``, which the plain print logger does not expose.
+        logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
 

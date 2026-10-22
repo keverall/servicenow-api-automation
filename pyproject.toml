@@ -28,6 +28,8 @@ dependencies = [
 
 [project.optional-dependencies]
 webhook = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
+
+[dependency-groups]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
@@ -36,6 +38,10 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.9",
     "types-PyYAML>=6.0",
+    # The webhook receiver is part of the typed source tree, so the type
+    # checker needs its imports to be present.
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
 ]
 
 [project.scripts]
@@ -44,6 +50,10 @@ opsramp-gw = "opsramp_automation.cli:app"
 [project.urls]
 Homepage = "https://github.com/keverall/servicenow-api-automation"
 Repository = "https://github.com/keverall/servicenow-api-automation"
+
+[tool.uv]
+# The default `dev` dependency group is installed by `uv sync`.
+default-groups = ["dev"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/opsramp_automation"]

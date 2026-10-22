@@ -143,7 +143,8 @@ def test_download_url_and_package_download(respx_mock: respx.MockRouter, api, tm
     )
     respx_mock.get(f"{API}/v2/download/gateway/ova").mock(
         return_value=httpx.Response(
-            200, json={"url": "https://dl01.opsramp.com/itop/download/gateway/abc", "expires_in": 900}
+            200,
+            json={"url": "https://dl01.opsramp.com/itop/download/gateway/abc", "expires_in": 900},
         )
     )
     payload = b"fake-ova-bytes"

@@ -28,6 +28,7 @@ gateway and route its alerts into ServiceNow.
 | `src/opsramp_automation/cli.py` | The `opsramp-gw` command line interface |
 | `config/mapping/` | Declarative alert to ServiceNow field mappings |
 | `.github/workflows/` | CI, deploy, admin and sync pipelines |
+| `Dockerfile` | Container image for the CLI and the sync daemon |
 
 ---
 
@@ -42,6 +43,12 @@ gateway and route its alerts into ServiceNow.
 ---
 
 ## Installation
+
+```bash
+make venv            # creates .venv and installs the package with dev extras
+```
+
+Or do it by hand:
 
 ```bash
 python3 -m venv .venv
@@ -77,11 +84,11 @@ opsramp-gw --help
 
 ```bash
 export OPSRAMP_TENANT_ID=client_123456
-export OPSRAMP_API_KEY=...
-export OPSRAMP_API_SECRET=...
+export OPSRAMP_CLIENT_ID=...
+export OPSRAMP_CLIENT_SECRET=...
 export GATEWAY_HOST=10.20.30.40
-export GATEWAY_ADMIN_USER=admin
-export GATEWAY_ADMIN_PASSWORD=...
+export GATEWAY_USERNAME=admin
+export GATEWAY_PASSWORD=...
 export GATEWAY_REGISTRATION_SERVER=https://api.opsramp.com
 
 # Report only what would change.
@@ -94,40 +101,21 @@ opsramp-gw deploy --profile-name prod-gateway --package ova --report deploy-repo
 The deploy is idempotent: an already registered gateway is left alone and
 configuration is only written when it differs from the appliance state.
 
-The desired configuration can be supplied as YAML or JSON:
-
-```yaml
-# desired-gateway.yaml
-network:
-  domain_name: example.com
-  host_name: opsramp-gw-01
-  default_interface: ens160
-  dhcp: "False"
-  ip_address: 10.20.30.40
-  subnet_mask: 255.255.255.0
-  default_gateway: 10.20.30.1
-  dns_entries: 10.20.30.1
-ntp_servers:
-  - 216.239.35.4
-  - 45.32.199.189
-syslog_receivers:
-  - receiver: 10.20.30.50
-    port: "514"
-    protocol: udp
-    selectors: "*.*"
-timezone: Europe/London
-static_routes:
-  - srouteIP: 10.30.0.0
-    srouteGateway: 10.20.30.254
-    srouteSubnet: 255.255.0.0
-    srouteMetric: "0"
-    srouteInterface: ens160
-proxy:
-  connection: direct
-```
+The desired configuration is taken from the `DEPLOY_*` settings (see
+`.env.example`), for example:
 
 ```bash
-opsramp-gw deploy --desired-config desired-gateway.yaml
+export DEPLOY_HOSTNAME=opsramp-gw-01
+export DEPLOY_DOMAIN=example.com
+export DEPLOY_INTERFACE=ens160
+export DEPLOY_IP_ADDRESS=10.20.30.40
+export DEPLOY_SUBNET=255.255.255.0
+export DEPLOY_NETWORK_GATEWAY=10.20.30.1
+export DEPLOY_DNS=10.20.30.1
+export DEPLOY_DHCP=false
+export DEPLOY_TIMEZONE=Europe/London
+export DEPLOY_NTP_SERVERS=216.239.35.4,45.32.199.189
+export DEPLOY_SYSLOG_RECEIVERS=10.20.30.50,10.20.30.51
 ```
 
 ### Administer a gateway
@@ -136,16 +124,28 @@ opsramp-gw deploy --desired-config desired-gateway.yaml
 opsramp-gw admin status
 opsramp-gw admin config --info generalInfo
 opsramp-gw admin network set --hostname gw-01 --ip 10.20.30.40 --subnet 255.255.255.0 \
-    --gateway 10.20.30.1 --dns 10.20.30.1 --domain example.com --interface ens160 --dhcp False
-opsramp-gw admin ntp set --server 216.239.35.4 --server 45.32.199.189
+    --gateway 10.20.30.1 --dns 10.20.30.1 --domain example.com --interface ens160 --dhcp
+opsramp-gw admin ntp set --server 216.239.35.4 --server 45.32.199.189 --sync
 opsramp-gw admin syslog add --receiver 10.20.30.50 --port 514 --protocol udp
+opsramp-gw admin syslog delete --receiver 10.20.30.50 --port 514 --protocol udp
 opsramp-gw admin syslog reset
-opsramp-gw admin timezone --tz Europe/London
-opsramp-gw admin route --network 10.30.0.0 --gateway 10.20.30.254 \
+opsramp-gw admin timezone set --tz Europe/London
+opsramp-gw admin datetime set --date 04-13-2021 --time 10:20:30
+opsramp-gw admin route add --network 10.30.0.0 --gateway 10.20.30.254 \
     --subnet 255.255.0.0 --metric 0 --interface ens160
-opsramp-gw admin proxy --direct
+opsramp-gw admin proxy set --direct
 opsramp-gw admin service ntp status
 opsramp-gw admin restart all
+opsramp-gw admin register --server https://api.opsramp.com --activation-token <token>
+```
+
+Every appliance action accepts `--payload-json`, which overrides the generated
+request body.  That is how the CI workflow drives the appliance with a single
+generic input:
+
+```bash
+opsramp-gw admin syslog add --payload-json \
+  '{"syslogInfo": {"receiver": "10.0.0.1", "port": "514", "protocol": "udp", "selectors": "*.*"}}'
 ```
 
 The password rotation reads the credentials from the environment so they never
@@ -154,26 +154,27 @@ appear in the process arguments or the shell history:
 ```bash
 export GATEWAY_OLD_PASSWORD=...
 export GATEWAY_NEW_PASSWORD=...
-opsramp-gw admin password
-```
-
-Any appliance action can also be driven generically, which is what the CI
-workflow uses:
-
-```bash
-opsramp-gw admin apply --action syslogAdd \
-    --payload-json '{"syslogInfo": {"receiver": "10.0.0.1", "port": "514", "protocol": "udp", "selectors": "*.*"}}'
+opsramp-gw admin password change
 ```
 
 ### Management profiles
 
 ```bash
 opsramp-gw profile list
-opsramp-gw profile create --name prod-gateway --description "Managed by CI"
-opsramp-gw profile attach --profile-id 12345
-opsramp-gw profile reconnect --profile-id 12345
-opsramp-gw profile detach --profile-id 12345
-opsramp-gw profile services --profile-id 12345 --sip-agent --no-synthetics-agent
+opsramp-gw profile list --query "name:prod-gateway"
+opsramp-gw profile create prod-gateway --description "Managed by CI" --type Gateway
+opsramp-gw profile attach 12345
+opsramp-gw profile tunnel 12345
+opsramp-gw profile reconnect 12345
+opsramp-gw profile detach 12345
+opsramp-gw profile services 12345 --service sipAgent --enable
+opsramp-gw profile out-of-sync
+```
+
+### Inspect alerts
+
+```bash
+opsramp-gw alerts list --client client_123456 --state Critical --since 2026-01-01 --limit 50
 ```
 
 ### Sync OpsRamp alerts into ServiceNow
@@ -210,31 +211,42 @@ ServiceNow **Event Management** and `incident.yaml` targets **Incident**.
 table: event
 dedup_field: correlation_id
 correlation:
-  format: "opsramp:{client_unique_id}:{unique_id}"
+  format: "opsramp:{clientUniqueId}:{uniqueId}"
+  max_length: 1024
 fields:
   source:      { const: OpsRamp }
-  message:     { from: subject }
-  description: { render: description, max_length: 4000 }
+  message:     { from: subject, truncate: 1000 }
+  description: { render: description, truncate: 4000 }
   node:        { from: host_name }
   cmdb_ci:     { from: host_name, ci_lookup: true }
-  opened_at:   { from: alert_time, format: servicenow_datetime }
+  opened_at:   { from: alertTime, format: servicenow_datetime }
+  state:
+    on_open:
+      const: "1"
+    on_recovery:
+      const: "6"
 ```
 
-A field specification may use `const`, `from`, `fallback`, `map`, `template`,
-`render`, `format`, `max_length` and `ci_lookup`.
+A field specification may use `const`, `from`, `fallback`, `map`, `default`,
+`template`, `render`, `truncate`, `ci_lookup`, `format`, `optional` and the
+`on_open` / `on_recovery` branches.  `from` accepts a dotted path into the
+alert (`subject`, `device.hostName`) or the pseudo sources `correlation` and
+`state`.  `render` accepts `description` and `metadata`.
 
 ### Deduplication and lifecycle
 
-* The dedup value is `opsramp:<clientUniqueId>:<alertUniqueId>`, written to
-  the `correlation_id` column (`message_key` for `em_event`).
+* The dedup value is `opsramp:<clientUniqueId>:<uniqueId>`, written to the
+  `correlation_id` column (`message_key` for `em_event`).
 * One OpsRamp alert therefore maps to exactly one ServiceNow record.
 * A **recovery** alert updates that record (state becomes `6` / `Resolved`,
   or `resolution_state` becomes `Closing` for Event Management) instead of
   creating a second one.
 * A recovery for an alert that was never written is skipped.
-* The sync keeps a SQLite checkpoint (`.opsramp-sync/state.db`) holding the
-  cursor and the correlation cache, so a re-run never duplicates work and
-  repeated alerts are cheap.
+* An alert that never had a problem state is skipped before any ServiceNow
+  call, which keeps the request count inside the OpsRamp rate limits.
+* The sync keeps a SQLite checkpoint (`SYNC_STATE_PATH`) holding the cursor
+  and the correlation cache, so a re-run never duplicates work and repeated
+  alerts are cheap.
 
 ### Sync settings
 
@@ -245,11 +257,13 @@ A field specification may use `const`, `from`, `fallback`, `map`, `template`,
 | `SYNC_STATE_PATH` | `.opsramp-sync/state.db` | Checkpoint database |
 | `SYNC_DRY_RUN` | `true` | Refuse to write to ServiceNow |
 | `SYNC_CLIENT_IDS` | – | Comma separated OpsRamp client ids |
-| `SYNC_STATES` | `CRITICAL,WARNING` | Monitored alert states |
+| `SYNC_STATES` | `Critical,Warning,Ok` | Monitored alert states |
 | `SYNC_CLOSE_ON_RECOVERY` | `true` | Close the record on recovery |
 | `SYNC_CI_LOOKUP` | `true` | Resolve `cmdb_ci` from the host name |
 | `SYNC_MAPPING_FILE` | `config/mapping/event.yaml` | Mapping to use |
-| `SYNC_MAX_FAILURES` | `0` | Failures tolerated before a non-zero exit |
+| `SYNC_MAX_ATTEMPTS` | `3` | Retry budget for a failing alert |
+| `SYNC_CACHE_TTL_MINUTES` | `60` | How long a cached correlation is trusted |
+| `SYNC_PAGE_SIZE` | `100` | Alerts requested per page |
 
 ---
 
@@ -271,14 +285,18 @@ only available to the workflows that need them.
 | --- | --- |
 | `OPSRAMP_BASE_URL` | all |
 | `OPSRAMP_TENANT_ID` | all |
-| `OPSRAMP_API_KEY` | all |
-| `OPSRAMP_API_SECRET` | all |
+| `OPSRAMP_CLIENT_ID`, `OPSRAMP_CLIENT_SECRET` | all |
 | `GATEWAY_HOST`, `GATEWAY_PORT` | deploy, admin |
-| `GATEWAY_ADMIN_USER`, `GATEWAY_ADMIN_PASSWORD` | deploy, admin |
+| `GATEWAY_USERNAME`, `GATEWAY_PASSWORD` | deploy, admin |
 | `GATEWAY_CA_BUNDLE` | deploy, admin (base64 encoded PEM) |
 | `GATEWAY_REGISTRATION_SERVER` | deploy |
-| `SERVICENOW_INSTANCE`, `SERVICENOW_USER`, `SERVICENOW_PASSWORD` | sync |
+| `GATEWAY_OLD_PASSWORD`, `GATEWAY_NEW_PASSWORD` | admin (password change) |
+| `SERVICENOW_INSTANCE`, `SERVICENOW_USERNAME`, `SERVICENOW_PASSWORD` | sync |
 | `VSHERE_*` | deploy (only with the vSphere provisioner) |
+
+Non-secret values (profile name, IP addresses, NTP servers, ...) belong in
+repository **variables** of the same environment rather than in the workflow
+file.
 
 The gateway appliance ships a self-signed certificate.  Export the appliance
 PEM into `GATEWAY_CA_BUNDLE` for production use; `GATEWAY_VERIFY_TLS=false`
@@ -286,11 +304,23 @@ is available as an explicit, warned fallback.
 
 ---
 
+## Container image
+
+```bash
+make docker-build
+docker run --rm --env-file .env opsramp-automation:local sync --once --dry-run
+```
+
+The image ships the CLI, the mapping files and a non-root user.  Mount a volume
+on `/data` to persist the sync checkpoint (`SYNC_STATE_PATH=/data/state.db`).
+
+---
+
 ## Runbook
 
 **A gateway is not registering.**  Check `opsramp-gw admin status` for the
-registration and tunnel state, then `opsramp-gw profile attach --profile-id
-<id>` to issue a fresh activation token and re-run the registration action.
+registration and tunnel state, then `opsramp-gw profile attach <id>` to issue a
+fresh activation token and re-run the registration action.
 
 **The sync missed alerts.**  The cursor keeps a `SYNC_LOOKBACK_MINUTES`
 overlap.  To replay a wider window, delete the cursor row and run a sync with
@@ -305,16 +335,17 @@ SYNC_LOOKBACK_MINUTES=1440 opsramp-gw sync --once
 run the sync again.  Because the correlation id is stable, the sync patches
 the existing records instead of creating new ones.
 
-**A password needs rotating.**  `opsramp-gw admin password` changes the
-appliance password.  The value has to be updated in the secret store as well;
-the `gateway-admin.yml` workflow can do this with `gh secret set`.
+**A password needs rotating.**  `opsramp-gw admin password change` changes the
+appliance password.  The value has to be updated in the secret store as well.
 
 **Integration events failed to deliver.**  Inspect the activity log and replay
 the failures (the retry window may not exceed two hours):
 
 ```bash
-opsramp-gw integration activity --status FAILED --since-hours 24
-opsramp-gw integration retry --installed-intg-id INTG-... --since-hours 1 --length-minutes 30
+opsramp-gw integration activity --installed-id INTG-... --status FAILED \
+    --since 2026-01-01T00:00:00Z --until 2026-01-01T01:00:00Z
+opsramp-gw integration retry --installed-id INTG-... \
+    --since 2026-01-01T00:00:00Z --until 2026-01-01T01:00:00Z
 ```
 
 ---
@@ -322,10 +353,13 @@ opsramp-gw integration retry --installed-intg-id INTG-... --since-hours 1 --leng
 ## Development
 
 ```bash
-make lint       # ruff check + format check
-make typecheck  # mypy
-make test       # pytest
-make coverage   # pytest with coverage
+make venv        # create .venv and install the package with dev extras
+make lint        # ruff check + format check
+make format      # apply ruff autofixes and formatting
+make typecheck   # mypy
+make test        # pytest
+make coverage    # pytest with a coverage report
+make build       # build the wheel and sdist
 ```
 
 ---

@@ -59,10 +59,12 @@ def _split_csv(value: Any) -> Any:
             try:
                 parsed = json.loads(stripped)
             except json.JSONDecodeError:
-                return [item.strip() for item in stripped.strip("[]").split(",") if item.strip()]
+                parsed = [item.strip() for item in stripped.strip("[]").split(",") if item.strip()]
             if isinstance(parsed, list):
-                return [str(item) for item in parsed]
-            return [str(parsed)]
+                # Keep structured items intact so that pydantic reports a
+                # precise type error instead of storing their repr.
+                return [item if isinstance(item, (dict, list)) else str(item) for item in parsed]
+            return [parsed if isinstance(parsed, (dict, list)) else str(parsed)]
         return [item.strip() for item in stripped.split(",") if item.strip()]
     return value
 

@@ -8,15 +8,13 @@ Build a Python package and CI/CD pipelines that:
 2. **Allow admin** of a deployed OpsRamp Gateway through the gateway appliance admin API (`https://<gateway>:5480`) — network, NTP, syslog, timezone, static routes, proxy, password rotation, service control, config inspection.
 3. **Integrate OpsRamp events with ServiceNow** — map OpsRamp alerts to ServiceNow records idempotently (dedup + lifecycle update/close), using the OpsRamp alerts API and the ServiceNow Table API.
 
-Repo: `github.com/keverall/servicenow-api-automation` (currently empty, single commit on `main`).
-
 ---
 
-## 2. Assumptions (explicit — user did not confirm; change any of these and the plan adapts)
+## 2. Assumptions
 
 | # | Assumption | Why | If wrong |
 |---|---|---|---|
-| A1 | **CI/CD platform = GitHub Actions** | Verified remote is `github.com/keverall/servicenow-api-automation` | Move `.github/workflows/*` to the target platform; the Python code is platform-agnostic |
+| A1 | **CI/CD platform = GitHub Actions** |  | Move `.github/workflows/*` to the target platform; the Python code is platform-agnostic |
 | A2 | **Gateway = Classic OpsRamp Gateway** (the appliance exposing the `:5480` admin API), OVA package on VMware vSphere | The `:5480` admin API is only on the Classic/Windows appliance; "allow admin" points at it | NextGen (K3s/Helm) has no `:5480` API — replace `gateway_admin.py` with a Helm/`opsramp-collector-start` driver |
 | A3 | **Event transport = polling** the OpsRamp alerts API (`GET /api/v2/tenants/{tenantId}/alerts/search`) | Uses only fully documented public API; resumable; no inbound firewall hole | Webhook fast-path is already in scope as an optional alternative (see §5.4) |
 | A4 | **ServiceNow target table = ITSM `event` table** by default | "Service now for opsramp events" reads most directly as ServiceNow *Events* | Field maps for `em_event` and `incident` are shipped; switch with one config key |
