@@ -138,7 +138,7 @@ servicenow-api-automation/
 - Runtime deps: `httpx[http2]`, `pydantic>=2`, `pydantic-settings`, `typer`, `PyYAML`, `structlog`, `tenacity`.
 - Optional extras: `vsphere` (nothing — `ovftool` is an external binary), `webhook` (`fastapi`, `uvicorn`).
 - Dev deps: `pytest`, `pytest-cov`, `pytest-httpx`, `respx`, `ruff`, `mypy`.
-- Entry point: `opsramp-gw = "opsramp_automation.cli:app"`.
+- Entry point: `opsramp-gw = "opsramp_automation.main:main"` (a thin `main.py` callable; the typer app itself still lives in `cli.py` and supports `python -m opsramp_automation`).
 - `[tool.ruff]` line-length 100, target `py311`; `[tool.mypy]` strict-ish (`disallow_untyped_defs = true`).
 - `[tool.pytest.ini_options]` testpaths, `addopts = "-ra --strict-markers"`.
 

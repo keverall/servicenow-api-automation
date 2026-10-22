@@ -45,7 +45,7 @@ dev = [
 ]
 
 [project.scripts]
-opsramp-gw = "opsramp_automation.cli:app"
+opsramp-gw = "opsramp_automation.main:main"
 
 [project.urls]
 Homepage = "https://github.com/keverall/servicenow-api-automation"

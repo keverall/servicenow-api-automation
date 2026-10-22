@@ -25,7 +25,8 @@ gateway and route its alerts into ServiceNow.
 | `src/opsramp_automation/sync/` | Alert to ServiceNow mapping, checkpointing and the sync engine |
 | `src/opsramp_automation/deploy/` | Deployment orchestrator and provisioners |
 | `src/opsramp_automation/webhook/` | Optional webhook receiver for the push based delivery path |
-| `src/opsramp_automation/cli.py` | The `opsramp-gw` command line interface |
+| `src/opsramp_automation/cli.py` | The `opsramp-gw` command line interface (typer application and commands) |
+| `src/opsramp_automation/main.py` | Importable `main()` entry point backing the `opsramp-gw` console script and `python -m opsramp_automation` |
 | `config/mapping/` | Declarative alert to ServiceNow field mappings |
 | `.github/workflows/` | CI, deploy, admin and sync pipelines |
 | `Dockerfile` | Container image for the CLI and the sync daemon |

@@ -1,0 +1,10 @@
+"""Enable ``python -m opsramp_automation`` to launch the CLI."""
+
+from __future__ import annotations
+
+import sys
+
+from .main import main
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())
