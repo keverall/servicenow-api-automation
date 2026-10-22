@@ -43,7 +43,7 @@ build: ## Build the wheel and sdist
 
 clean: ## Remove build and cache artefacts
 	rm -rf build dist *.egg-info .pytest_cache .mypy_cache .ruff_cache .coverage coverage.xml htmlcov
-	$(UV) cache clean
+	$(UV) cache clean  --force
 
 local-sync: ## Run a single dry-run sync against the configured instance
 	$(UV) run opsramp-gw sync --once --dry-run
